@@ -5,20 +5,31 @@ require 'nokogiri'
 # 猟犬 a url hound
 class Ryouken
   
-  def initialize(url)
-    @url = url
-    uri = URI(url)
+  def initialize(seed)
+    uri = URI(seed)
+    @seed = seed
     @host = uri.scheme + '://' + uri.host
+    @visited = Array.new
   end
   
-  def crawl
-    children = process_page(@url)
-    rm_secondary_urls!(children, @host)
+  def crawl(url=@seed)
+    children_all = process_page(url)
+    children = rm_secondary_urls!(children_all, @host)
+    children -= @visited
+    while !children.empty?
+      next_url = children.shift
+      unless @visited.include?(next_url)
+        puts 'Visiting ' + next_url
+        @visited.push(next_url)
+        self.crawl(next_url)
+      end
+    end
   end
   
+  # Use Nokogiri to fetch all links on a page
   def process_page(url)
-    page = Nokogiri::HTML(open(@url))
-    get_links(@url, page)
+    page = Nokogiri::HTML(open(url))
+    get_links(url, page)
   end
   
   # Return an array of links containing scheme+host+path
@@ -55,5 +66,5 @@ class Ryouken
   end
 end
 
-hound = Ryouken.new('http://www.bbc.co.uk')
-puts hound.crawl
+hound = Ryouken.new('http://www.asia-gazette.com')
+hound.crawl
