@@ -3,45 +3,31 @@ require 'open-uri'
 require 'nokogiri'
 
 class Ryouken
-  def initialize(seed)
-    @seed = URL.new(seed)
+  def initialize(seed, include_patterns: nil, exclude_patterns: nil)
+    uri = URI seed
+    @seed = seed
+    @base = "#{uri.scheme}://#{uri.host}"
+    @include_patterns = include_patterns
+    @exclude_patterns = exclude_patterns
   end
   
-  def get_links
+  def get_urls
     doc = Nokogiri::HTML(open(@seed))
-    #doc.xpath("//a/@href").map(&:text).uniq
-    urls = doc.css('a').map { |href| href.attribute('href').text }.uniq
-    urls.each { |url| puts url.absolute(base: @seed) }
+    doc.xpath("//a/@href").map(&:text).uniq
+  end
+  
+  def include_urls(url_array)
+    url_array.select {|url| url =~ /#{Regexp.quote(@include_patterns)}/} if @include_patterns
+  end
+  
+  def exclude_urls(url_array)
+    url_array.reject {|url| url =~ /#{Regexp.quote(@exclude_patterns)}/} if @exclude_patterns
+  end
+  
+  def is_relative?(url)
+    url =~ /^\// ? true : false
   end
 end
 
-class URL
-  def initialize(url)
-    @url = url
-  end
-  
-  def to_s
-    @url.to_s
-  end
-  
-  def +(rhs)
-    URL.new(to_s + rhs.to_s)
-  end
-  
-  def ==(rhs)
-    @url == rhs.to_s
-  end
-  
-  def absolute(base: nil)
-    is_relative? ? base + self : self
-  end
-  
-  def is_relative?
-    @url =~ /^\// ? true : false 
-  end
-end
-
-page = "http://www.asia-gazette.com"
-
-a = Ryouken.new(page)
-puts a.get_links
+seed = Ryouken.new("http://www.asia-gazette.com/", include_patterns: 'www.asia-gazette.com')
+seed.get_urls
