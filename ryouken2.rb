@@ -51,3 +51,8 @@ class Ryouken
     @work << remaining
   end
 end
+
+my_crawler = Ryouken.new('http://www.nytimes.com/pages/world/asia/', include_ptn: 'ref=asia')
+my_crawler.run do |page|
+  puts "Visiting #{page.url}"
+end
