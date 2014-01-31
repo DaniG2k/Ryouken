@@ -4,27 +4,24 @@ require 'nokogiri'
 class Ryouken
   class PageProcessor
     attr_reader :url, :dom
+    
     def initialize(url)
-      @url = url.to_s # url is a URI object
-      @dom = open(@url) { |fh| Nokogiri::HTML(fh) }
+      @url = url
+      @dom = open(@url.to_s) { |fh| Nokogiri::HTML(fh) }
     end
     
     # Get all hrefs and return in @dom and return them as a set.
     def urls
-      @dom.xpath("//a/@href").map { |node| rewrite_url(node.text) }.uniq
+      @dom.xpath("//a/@href").map { |node| uri(node.text) }.uniq
     end
     
-    # In the event a url is relative (ex. '/') rewrite it to a full path
-    def rewrite_url(path)
-      is_relative?(url) ? @url + path : path
-    end
-    
-    def is_relative?(url)
-      url =~ /^\// ? true : false
+    def uri(url)
+      URI(@url + url)
     end
   end
   
   attr_reader :start_url, :include_ptn, :exclude_ptn, :visited, :work
+  
   def initialize(start_url, include_ptn: nil, exclude_ptn: nil)
     @start_url    = URI(start_url)
     @visited      = Array.new
@@ -45,14 +42,15 @@ class Ryouken
   end
   
   def append_urls(urls)
+    puts "URLS: #{urls}"
     remaining = urls - @visited - @work
     remaining.select! { |url| url =~ @include_ptn } if @include_ptn
     remaining.reject! { |url| url =~ @exclude_ptn } if @exclude_ptn
-    @work << remaining
+    @work.concat(remaining).uniq
   end
 end
 
+
+#my_crawler = Crawler.new('https://www.asia-gazette.com', include_patterns: 'asia-gazette')
 my_crawler = Ryouken.new('http://www.nytimes.com/pages/world/asia/', include_ptn: 'ref=asia')
-my_crawler.run do |page|
-  puts "Visiting #{page.url}"
-end
+my_crawler.run { |page| puts "Visiting #{page.url}" }
