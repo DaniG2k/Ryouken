@@ -1,70 +1,56 @@
-require 'uri'
+# 猟犬 a url hound
 require 'open-uri'
 require 'nokogiri'
 
-# 猟犬 a url hound
 class Ryouken
-  
-  def initialize(seed)
-    uri = URI(seed)
-    @seed = seed
-    @host = uri.scheme + '://' + uri.host
-    @visited = Array.new
-  end
-  
-  def crawl(url=@seed)
-    children_all = process_page(url)
-    children = rm_secondary_urls!(children_all, @host)
-    children -= @visited
-    while !children.empty?
-      next_url = children.shift
-      unless @visited.include?(next_url)
-        puts 'Visiting ' + next_url
-        @visited.push(next_url)
-        self.crawl(next_url)
-      end
+  class PageProcessor
+    attr_reader :url, :dom
+    
+    def initialize(url)
+      @url = url
+      @dom = open(@url.to_s) { |fh| Nokogiri::HTML(fh) }
+    end
+    
+    def urls
+      @dom.xpath("//a/@href").map { |node| uri(node.text) }.uniq
+    end
+    
+    def uri(url)
+      URI(@url + url)
     end
   end
   
-  # Use Nokogiri to fetch all links on a page
-  def process_page(url)
-    page = Nokogiri::HTML(open(url))
-    get_links(url, page)
+  attr_reader :start_url, :include_ptn, :exclude_ptn, :visited, :work
+  
+  def initialize(start_url, include_ptn: nil, exclude_ptn: nil)
+    @start_url    = URI(start_url)
+    @visited      = Array.new
+    @work         = [@start_url]
+    # The && is for returning nil if no value was specified
+    @include_ptn  = include_ptn && /#{Regexp.quote(include_ptn)}/
+    @exclude_ptn  = exclude_ptn && /#{Regexp.quote(exclude_ptn)}/
   end
   
-  # Return an array of links containing scheme+host+path
-  def get_links(url, page)
-    links = []
-    page.css('a').map do |link|
-      new_url = link['href']
-      unless new_url == nil
-        if relative?(new_url)
-          new_url = make_absolute(url, new_url)
-        end
-        links.push(new_url)
-      end
-    end
-    return links
-  end
-  
-  def relative?(url)
-    if((url =~ /^\/.+/) != nil)
-      return true
-    else
-      return false
+  def run
+    until @work.empty?
+      current_url = @work.shift
+      @visited << current_url
+      page = PageProcessor.new(current_url)
+      yield(page)
+      append_urls(page.urls)
     end
   end
   
-  def make_absolute(url, path)
-    @host + path
-  end
-  
-  def rm_secondary_urls!(url_list, host)
-    primary_urls = []
-    url_list.each {|url| primary_urls.push(url) if url.start_with?(host) }
-    primary_urls
+  def append_urls(urls)
+    puts "\n\n\nFound:\n\n\n#{urls}"
+    urls.select! { |url| url.to_s =~ @include_ptn } if @include_ptn
+    urls.reject! { |url| url.to_s =~ @exclude_ptn } if @exclude_ptn
+    @work.concat(urls).uniq
+    puts "\n\n\nTodo:#{@work}\n\n\n"
   end
 end
 
-hound = Ryouken.new('http://www.asia-gazette.com')
-hound.crawl
+
+#my_crawler = Ryouken.new('http://www.nytimes.com/pages/world/asia/', include_ptn: 'ref=asia')
+my_crawler = Ryouken.new 'http://new.ted.com/', include_ptn: 'ted.com'
+my_crawler.run { |page| puts "Visiting #{page.url}" }
